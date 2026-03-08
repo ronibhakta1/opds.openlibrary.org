@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional
+import asyncio
 
 import httpx
 from fastapi import APIRouter, Query, Request
@@ -68,7 +69,7 @@ def _search(provider: OpenLibraryDataProvider, **kwargs):
 
 
 @router.get("/opds", summary="OPDS 2.0 homepage")
-def opds_home(request: Request):
+async def opds_home(request: Request):
     logger.info("GET /opds client=%s", request.client)
     base = _base_url(request)
     provider = get_provider(base)
@@ -107,15 +108,18 @@ def opds_home(request: Request):
         ),
     ]
 
-    loaded_groups = []
-    for title, q, sort in groups_config:
+    async def fetch_group(title: str, q: str, sort: str):
         try:
-            resp = _search(provider, query=q, sort=sort, limit=25)
-            loaded_groups.append(
-                Catalog.create(metadata=Metadata(title=title), response=resp)
-            )
+            resp = await asyncio.to_thread(_search, provider, query=q, sort=sort, limit=25)
+            return Catalog.create(metadata=Metadata(title=title), response=resp)
         except UpstreamError as exc:
             logger.warning("Omitting shelf %r due to upstream error: %s", title, exc)
+            return None
+
+    results = await asyncio.gather(
+        *(fetch_group(title, q, sort) for title, q, sort in groups_config)
+    )
+    loaded_groups = [g for g in results if g is not None]
 
     catalog = Catalog(
         metadata=Metadata(title="Open Library"),
@@ -151,7 +155,7 @@ def opds_home(request: Request):
 
 
 @router.get("/opds/search", summary="OPDS 2.0 search")
-def opds_search(
+async def opds_search(
     request: Request,
     query: str = Query(default="trending_score_hourly_sum:[1 TO *]", description="Solr search query"),
     limit: int = Query(default=25, ge=1, le=100),
@@ -164,7 +168,8 @@ def opds_search(
 
     catalog = Catalog.create(
         metadata=Metadata(title="Search Results"),
-        response=_search(
+        response=await asyncio.to_thread(
+            _search,
             provider,
             query=query,
             limit=limit,
@@ -186,11 +191,11 @@ def opds_search(
 
 
 @router.get("/opds/books/{edition_olid}", summary="OPDS 2.0 single edition")
-def opds_books(request: Request, edition_olid: str):
+async def opds_books(request: Request, edition_olid: str):
     logger.info("GET /opds/books/%s", edition_olid)
     base = _base_url(request)
     provider = get_provider(base)
-    resp = _search(provider, query=f"edition_key:{edition_olid}")
+    resp = await asyncio.to_thread(_search, provider, query=f"edition_key:{edition_olid}")
     if not resp.records:
         logger.warning("edition not found: %s", edition_olid)
         raise EditionNotFound(edition_olid)

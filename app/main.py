@@ -38,4 +38,9 @@ def handle_upstream_error(_: Request, exc: UpstreamError) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    return JSONResponse(content="", media_type="application/javascript")
+
+
 app.include_router(opds_router)
