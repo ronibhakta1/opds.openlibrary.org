@@ -161,8 +161,9 @@ async def opds_search(
     limit: int = Query(default=25, ge=1, le=100),
     page: int = Query(default=1, ge=1),
     sort: Optional[str] = Query(default=None),
+    mode: str = Query(default="everything", description="Search mode, e.g. 'ebooks' or 'everything'"),
 ):
-    logger.info("GET /opds/search query=%r limit=%s page=%s sort=%s", query, limit, page, sort)
+    logger.info("GET /opds/search query=%r limit=%s page=%s sort=%s mode=%s", query, limit, page, sort, mode)
     base = _base_url(request)
     provider = get_provider(base)
 
@@ -175,6 +176,7 @@ async def opds_search(
             limit=limit,
             offset=(page - 1) * limit,
             sort=sort,
+            facets={"mode": mode},
         ),
         links=[
             Link(rel="self",   href=str(request.url),                type=OPDS_MEDIA_TYPE),
