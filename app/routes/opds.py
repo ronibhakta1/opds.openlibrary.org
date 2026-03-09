@@ -33,8 +33,7 @@ def _base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
-def get_provider(base_url: str) -> OpenLibraryDataProvider:
-    OpenLibraryDataProvider.BASE_URL = base_url
+def get_provider() -> OpenLibraryDataProvider:
     OpenLibraryDataProvider.OL_BASE_URL = OL_BASE_URL
     OpenLibraryDataProvider.USER_AGENT = OL_USER_AGENT
     OpenLibraryDataProvider.REQUEST_TIMEOUT = OL_REQUEST_TIMEOUT
@@ -72,7 +71,7 @@ def _search(provider: OpenLibraryDataProvider, **kwargs):
 async def opds_home(request: Request):
     logger.info("GET /opds client=%s", request.client)
     base = _base_url(request)
-    provider = get_provider(base)
+    provider = get_provider()
     search_url = OpenLibraryDataProvider.SEARCH_URL
 
     groups_config = [
@@ -165,7 +164,7 @@ async def opds_search(
 ):
     logger.info("GET /opds/search query=%r limit=%s page=%s sort=%s mode=%s", query, limit, page, sort, mode)
     base = _base_url(request)
-    provider = get_provider(base)
+    provider = get_provider()
 
     catalog = Catalog.create(
         metadata=Metadata(title="Search Results"),
@@ -196,7 +195,7 @@ async def opds_search(
 async def opds_books(request: Request, edition_olid: str):
     logger.info("GET /opds/books/%s", edition_olid)
     base = _base_url(request)
-    provider = get_provider(base)
+    provider = get_provider()
     resp = await asyncio.to_thread(_search, provider, query=f"edition_key:{edition_olid}")
     if not resp.records:
         logger.warning("edition not found: %s", edition_olid)
