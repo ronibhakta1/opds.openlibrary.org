@@ -15,7 +15,7 @@ app/
   exceptions/
     __init__.py        # OPDSException, EditionNotFound, UpstreamError
   routes/
-    opds.py            # All /opds/* route handlers
+    opds.py            # All route handlers (/, /search, /books/*)
 docker/
   Dockerfile           # Docker image definition
   docker-compose.yml   # Compose service definition
@@ -29,9 +29,9 @@ scripts/
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/opds` | Homepage catalog — featured subjects + curated shelves |
-| `GET` | `/opds/search` | Search Open Library (`query`, `limit`, `page`, `sort`) |
-| `GET` | `/opds/books/{edition_olid}` | Single edition record (e.g. `OL7353617M`) |
+| `GET` | `/` | Homepage catalog — featured subjects + curated shelves |
+| `GET` | `/search` | Search Open Library (`query`, `limit`, `page`, `sort`) |
+| `GET` | `/books/{edition_olid}` | Single edition record (e.g. `OL7353617M`) |
 
 Interactive docs: `/docs` (Swagger UI) · `/redoc`
 
@@ -116,16 +116,16 @@ uvicorn app.main:app --reload --port 8080
 
 ```bash
 # Homepage catalog
-curl -s http://localhost:8080/opds | python -m json.tool | head -30
+curl -s http://localhost:8080/ | python -m json.tool | head -30
 
 # Search
-curl -s "http://localhost:8080/opds/search?query=Python&limit=5" | python -m json.tool | head -30
+curl -s "http://localhost:8080/search?query=Python&limit=5" | python -m json.tool | head -30
 
 # Single edition
-curl -s http://localhost:8080/opds/books/OL7353617M | python -m json.tool | head -30
+curl -s http://localhost:8080/books/OL7353617M | python -m json.tool | head -30
 
 # 404 — non-existent edition
-curl -s http://localhost:8080/opds/books/OL0000000M
+curl -s http://localhost:8080/books/OL0000000M
 # → {"detail": "Edition not found: OL0000000M"}
 ```
 

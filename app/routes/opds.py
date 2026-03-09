@@ -37,7 +37,7 @@ def get_provider() -> OpenLibraryDataProvider:
     OpenLibraryDataProvider.OL_BASE_URL = OL_BASE_URL
     OpenLibraryDataProvider.USER_AGENT = OL_USER_AGENT
     OpenLibraryDataProvider.REQUEST_TIMEOUT = OL_REQUEST_TIMEOUT
-    OpenLibraryDataProvider.SEARCH_URL = "/opds/search"
+    OpenLibraryDataProvider.SEARCH_URL = "/search"
     return OpenLibraryDataProvider()
 
 
@@ -67,9 +67,9 @@ def _search(provider: OpenLibraryDataProvider, **kwargs):
         raise UpstreamError(f"Could not reach OpenLibrary: {exc}") from exc
 
 
-@router.get("/opds", summary="OPDS 2.0 homepage")
+@router.get("/", summary="OPDS 2.0 homepage")
 async def opds_home(request: Request):
-    logger.info("GET /opds client=%s", request.client)
+    logger.info("GET / client=%s", request.client)
     base = _base_url(request)
     provider = get_provider()
     search_url = OpenLibraryDataProvider.SEARCH_URL
@@ -139,9 +139,9 @@ async def opds_home(request: Request):
         groups=loaded_groups,
         facets=None,
         links=[
-            Link(rel="self",   href=f"{base}/opds",                  type=OPDS_MEDIA_TYPE),
-            Link(rel="start",  href=f"{base}/opds",                  type=OPDS_MEDIA_TYPE),
-            Link(rel="search", href=f"{base}/opds/search{{?query}}", type=OPDS_MEDIA_TYPE, templated=True),
+            Link(rel="self",   href=f"{base}/",               type=OPDS_MEDIA_TYPE),
+            Link(rel="start",  href=f"{base}/",               type=OPDS_MEDIA_TYPE),
+            Link(rel="search", href=f"{base}/search{{?query}}", type=OPDS_MEDIA_TYPE, templated=True),
             Link(rel="http://opds-spec.org/shelf",
                  href="https://archive.org/services/loans/loan/?action=user_bookshelf",
                  type=OPDS_MEDIA_TYPE),
@@ -153,7 +153,7 @@ async def opds_home(request: Request):
     return opds_response(catalog.model_dump())
 
 
-@router.get("/opds/search", summary="OPDS 2.0 search")
+@router.get("/search", summary="OPDS 2.0 search")
 async def opds_search(
     request: Request,
     query: str = Query(default="trending_score_hourly_sum:[1 TO *]", description="Solr search query"),
@@ -162,7 +162,7 @@ async def opds_search(
     sort: Optional[str] = Query(default=None),
     mode: str = Query(default="everything", description="Search mode, e.g. 'ebooks' or 'everything'"),
 ):
-    logger.info("GET /opds/search query=%r limit=%s page=%s sort=%s mode=%s", query, limit, page, sort, mode)
+    logger.info("GET /search query=%r limit=%s page=%s sort=%s mode=%s", query, limit, page, sort, mode)
     base = _base_url(request)
     provider = get_provider()
 
@@ -179,7 +179,7 @@ async def opds_search(
         ),
         links=[
             Link(rel="self",   href=str(request.url),                type=OPDS_MEDIA_TYPE),
-            Link(rel="search", href=f"{base}/opds/search{{?query}}", type=OPDS_MEDIA_TYPE, templated=True),
+            Link(rel="search", href=f"{base}/search{{?query}}", type=OPDS_MEDIA_TYPE, templated=True),
             Link(rel="http://opds-spec.org/shelf",
                  href="https://archive.org/services/loans/loan/?action=user_bookshelf",
                  type=OPDS_MEDIA_TYPE),
@@ -191,9 +191,9 @@ async def opds_search(
     return opds_response(catalog.model_dump())
 
 
-@router.get("/opds/books/{edition_olid}", summary="OPDS 2.0 single edition")
+@router.get("/books/{edition_olid}", summary="OPDS 2.0 single edition")
 async def opds_books(request: Request, edition_olid: str):
-    logger.info("GET /opds/books/%s", edition_olid)
+    logger.info("GET /books/%s", edition_olid)
     base = _base_url(request)
     provider = get_provider()
     resp = await asyncio.to_thread(_search, provider, query=f"edition_key:{edition_olid}")
