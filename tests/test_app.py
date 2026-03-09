@@ -61,7 +61,7 @@ def _make_record(title="Test Book", edition_key="OL1M"):
 
 
 # ---------------------------------------------------------------------------
-# GET /opds
+# GET /
 # ---------------------------------------------------------------------------
 
 class TestOpdsHome:
@@ -70,7 +70,7 @@ class TestOpdsHome:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(),
         ):
-            resp = client.get("/opds")
+            resp = client.get("/")
         assert resp.status_code == 200
 
     def test_content_type(self):
@@ -78,7 +78,7 @@ class TestOpdsHome:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(),
         ):
-            resp = client.get("/opds")
+            resp = client.get("/")
         assert "application/opds+json" in resp.headers["content-type"]
 
     def test_metadata_title(self):
@@ -86,7 +86,7 @@ class TestOpdsHome:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(),
         ):
-            resp = client.get("/opds")
+            resp = client.get("/")
         data = resp.json()
         assert data["metadata"]["title"] == "Open Library"
 
@@ -95,7 +95,7 @@ class TestOpdsHome:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(),
         ):
-            resp = client.get("/opds")
+            resp = client.get("/")
         data = resp.json()
         nav_titles = {n["title"] for n in data.get("navigation", [])}
         for subject in FEATURED_SUBJECTS:
@@ -106,7 +106,7 @@ class TestOpdsHome:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(),
         ):
-            resp = client.get("/opds")
+            resp = client.get("/")
         data = resp.json()
         assert len(data.get("groups", [])) == 6
 
@@ -115,7 +115,7 @@ class TestOpdsHome:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(),
         ):
-            resp = client.get("/opds")
+            resp = client.get("/")
         data = resp.json()
         rels = {lnk["rel"] for lnk in data.get("links", [])}
         assert "self" in rels
@@ -123,7 +123,7 @@ class TestOpdsHome:
 
 
 # ---------------------------------------------------------------------------
-# GET /opds/search
+# GET /search
 # ---------------------------------------------------------------------------
 
 class TestOpdsSearch:
@@ -133,7 +133,7 @@ class TestOpdsSearch:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(records=[record], total=1),
         ):
-            resp = client.get("/opds/search?query=Python")
+            resp = client.get("/search?query=Python")
         assert resp.status_code == 200
 
     def test_content_type(self):
@@ -141,7 +141,7 @@ class TestOpdsSearch:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(),
         ):
-            resp = client.get("/opds/search")
+            resp = client.get("/search")
         assert "application/opds+json" in resp.headers["content-type"]
 
     def test_metadata_title(self):
@@ -149,7 +149,7 @@ class TestOpdsSearch:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(),
         ):
-            resp = client.get("/opds/search")
+            resp = client.get("/search")
         data = resp.json()
         assert data["metadata"]["title"] == "Search Results"
 
@@ -159,7 +159,7 @@ class TestOpdsSearch:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(records=[record], total=1),
         ):
-            resp = client.get("/opds/search?query=Python")
+            resp = client.get("/search?query=Python")
         data = resp.json()
         assert len(data.get("publications", [])) == 1
         assert data["publications"][0]["metadata"]["title"] == "Python Cookbook"
@@ -170,22 +170,22 @@ class TestOpdsSearch:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(),
         ) as mock_search:
-            client.get("/opds/search?query=test&page=2&limit=10")
+            client.get("/search?query=test&page=2&limit=10")
         mock_search.assert_called_once_with(
-            query="test", limit=10, offset=10, sort=None
+            query="test", limit=10, offset=10, sort=None, facets={"mode": "everything"}
         )
 
     def test_invalid_limit_rejected(self):
-        resp = client.get("/opds/search?limit=0")
+        resp = client.get("/search?limit=0")
         assert resp.status_code == 422
 
     def test_invalid_page_rejected(self):
-        resp = client.get("/opds/search?page=0")
+        resp = client.get("/search?page=0")
         assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------
-# GET /opds/books/{edition_olid}
+# GET /books/{edition_olid}
 # ---------------------------------------------------------------------------
 
 class TestOpdsBooks:
@@ -195,7 +195,7 @@ class TestOpdsBooks:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(records=[record], total=1),
         ):
-            resp = client.get("/opds/books/OL7353617M")
+            resp = client.get("/books/OL7353617M")
         assert resp.status_code == 200
 
     def test_content_type(self):
@@ -204,7 +204,7 @@ class TestOpdsBooks:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(records=[record], total=1),
         ):
-            resp = client.get("/opds/books/OL1M")
+            resp = client.get("/books/OL1M")
         assert "application/opds-publication+json" in resp.headers["content-type"]
 
     def test_returns_404_for_unknown_edition(self):
@@ -212,7 +212,7 @@ class TestOpdsBooks:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(records=[], total=0),
         ):
-            resp = client.get("/opds/books/OL9999999M")
+            resp = client.get("/books/OL9999999M")
         assert resp.status_code == 404
 
     def test_404_body_has_detail(self):
@@ -220,6 +220,6 @@ class TestOpdsBooks:
             "app.routes.opds.OpenLibraryDataProvider.search",
             return_value=_make_search_response(records=[], total=0),
         ):
-            resp = client.get("/opds/books/OL9999999M")
+            resp = client.get("/books/OL9999999M")
         data = resp.json()
         assert "detail" in data
