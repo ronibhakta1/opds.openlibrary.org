@@ -28,10 +28,6 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _base_url(request: Request) -> str:
     if OPDS_BASE_URL:
         return OPDS_BASE_URL.rstrip("/")
@@ -105,10 +101,6 @@ def _search(provider: OpenLibraryDataProvider, **kwargs):
         logger.error("upstream request error: %s", exc)
         raise UpstreamError(f"Could not reach OpenLibrary: {exc}") from exc
 
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
 
 @router.get("/", summary="OPDS 2.0 homepage")
 async def opds_home(request: Request):
