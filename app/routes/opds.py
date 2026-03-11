@@ -47,11 +47,12 @@ def _common_links(base: str) -> list[Link]:
     ]
 
 
-def get_provider() -> OpenLibraryDataProvider:
+def get_provider(base: str) -> OpenLibraryDataProvider:
     OpenLibraryDataProvider.OL_BASE_URL = OL_BASE_URL
     OpenLibraryDataProvider.USER_AGENT = OL_USER_AGENT
     OpenLibraryDataProvider.REQUEST_TIMEOUT = OL_REQUEST_TIMEOUT
     OpenLibraryDataProvider.SEARCH_URL = "/search"
+    OpenLibraryDataProvider.OPDS_BASE_URL = base
     return OpenLibraryDataProvider()
 
 
@@ -61,24 +62,6 @@ def opds_response(data: dict) -> JSONResponse:
 
 def opds_pub_response(data: dict) -> JSONResponse:
     return JSONResponse(content=data, media_type=OPDS_PUB_MEDIA_TYPE)
-
-
-def _rewrite_pub_self_links(catalog: Catalog, base: str) -> None:
-    """Replace library-generated publication self links with this OPDS server's URLs."""
-    if catalog.publications:
-        for pub in catalog.publications:
-            _rewrite_publication_links(pub, base)
-    if catalog.groups:
-        for group in catalog.groups:
-            _rewrite_pub_self_links(group, base)
-
-
-def _rewrite_publication_links(pub, base: str) -> None:
-    """Rewrite a single publication's self link to point to this OPDS server."""
-    for link in pub.links:
-        if link.rel == "self":
-            olid = link.href.rstrip("/").split("/")[-1]
-            link.href = f"{base}/books/{olid}"
 
 
 def _search(provider: OpenLibraryDataProvider, **kwargs):
@@ -106,7 +89,7 @@ def _search(provider: OpenLibraryDataProvider, **kwargs):
 async def opds_home(request: Request):
     logger.info("GET / client=%s", request.client)
     base = _base_url(request)
-    provider = get_provider()
+    provider = get_provider(base)
     search_url = OpenLibraryDataProvider.SEARCH_URL
 
     groups_config = [
@@ -179,7 +162,6 @@ async def opds_home(request: Request):
             *_common_links(base),
         ],
     )
-    _rewrite_pub_self_links(catalog, base)
     return opds_response(catalog.model_dump())
 
 
@@ -194,7 +176,7 @@ async def opds_search(
 ):
     logger.info("GET /search query=%r limit=%s page=%s sort=%s mode=%s", query, limit, page, sort, mode)
     base = _base_url(request)
-    provider = get_provider()
+    provider = get_provider(base)
 
     self_href = f"{base}/search?{request.url.query}" if request.url.query else f"{base}/search"
 
@@ -214,7 +196,6 @@ async def opds_search(
             *_common_links(base),
         ],
     )
-    _rewrite_pub_self_links(catalog, base)
     return opds_response(catalog.model_dump())
 
 
@@ -222,11 +203,10 @@ async def opds_search(
 async def opds_books(request: Request, edition_olid: str):
     logger.info("GET /books/%s", edition_olid)
     base = _base_url(request)
-    provider = get_provider()
+    provider = get_provider(base)
     resp = await asyncio.to_thread(_search, provider, query=f"edition_key:{edition_olid}")
     if not resp.records:
         logger.warning("edition not found: %s", edition_olid)
         raise EditionNotFound(edition_olid)
     pub = resp.records[0].to_publication()
-    _rewrite_publication_links(pub, base)
     return opds_pub_response(pub.model_dump())

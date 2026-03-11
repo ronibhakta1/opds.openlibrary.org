@@ -119,7 +119,7 @@ class TestOpdsHome:
         self_link = next(l for l in data["links"] if l["rel"] == "self")
         assert self_link["href"] == "https://example.com/opds/"
 
-    def test_publication_self_links_rewritten(self):
+    def test_publication_self_links_use_opds_base(self):
         record = _make_record(edition_key="OL99M")
         with patch(SEARCH_PATCH_TARGET, return_value=_make_search_response(records=[record], total=1)):
             with patch("app.routes.opds.OPDS_BASE_URL", "https://myopds.example.com"):
@@ -203,7 +203,7 @@ class TestOpdsSearch:
         assert self_link["href"].startswith("https://myopds.example.com/search?")
         assert "query=hello" in self_link["href"]
 
-    def test_publication_self_links_rewritten(self):
+    def test_publication_self_links_use_opds_base(self):
         record = _make_record(edition_key="OL42M")
         with patch(
             SEARCH_PATCH_TARGET,
@@ -251,7 +251,7 @@ class TestOpdsBooks:
             data = client.get("/books/OL9999999M").json()
         assert "detail" in data
 
-    def test_self_link_rewritten(self):
+    def test_self_link_uses_opds_base(self):
         record = _make_record(edition_key="OL55M")
         with patch(
             SEARCH_PATCH_TARGET,
