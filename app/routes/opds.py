@@ -4,6 +4,7 @@ from typing import Optional
 import asyncio
 
 import httpx
+import requests as requests_lib
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
@@ -33,11 +34,25 @@ def _base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
-def get_provider() -> OpenLibraryDataProvider:
+def _common_links(base: str) -> list[Link]:
+    """Links shared across catalog responses (search template, shelf, profile)."""
+    return [
+        Link(rel="search", href=f"{base}/search{{?query}}", type=OPDS_MEDIA_TYPE, templated=True),
+        Link(rel="http://opds-spec.org/shelf",
+             href="https://archive.org/services/loans/loan/?action=user_bookshelf",
+             type=OPDS_MEDIA_TYPE),
+        Link(rel="profile",
+             href="https://archive.org/services/loans/loan/?action=user_profile",
+             type="application/opds-profile+json"),
+    ]
+
+
+def get_provider(base: str) -> OpenLibraryDataProvider:
     OpenLibraryDataProvider.OL_BASE_URL = OL_BASE_URL
     OpenLibraryDataProvider.USER_AGENT = OL_USER_AGENT
     OpenLibraryDataProvider.REQUEST_TIMEOUT = OL_REQUEST_TIMEOUT
-    OpenLibraryDataProvider.SEARCH_URL = "/search"
+    OpenLibraryDataProvider.SEARCH_URL = f"{base}/search"
+    OpenLibraryDataProvider.OPDS_BASE_URL = base
     return OpenLibraryDataProvider()
 
 
@@ -55,14 +70,17 @@ def _search(provider: OpenLibraryDataProvider, **kwargs):
                     kwargs.get("query"), kwargs.get("limit"),
                     kwargs.get("offset", 0), kwargs.get("sort"))
         return provider.search(**kwargs)
-    except httpx.HTTPStatusError as exc:
-        logger.error("upstream HTTP error status=%s url=%s",
-                     exc.response.status_code, exc.request.url)
+    except (httpx.HTTPStatusError, requests_lib.exceptions.HTTPError) as exc:
+        response = exc.response
+        status_code = response.status_code if response is not None else 502
+        url = getattr(exc, "request", None)
+        url = url.url if url else "?"
+        logger.error("upstream HTTP error status=%s url=%s", status_code, url)
         raise UpstreamError(
-            f"OpenLibrary returned {exc.response.status_code}",
-            status_code=exc.response.status_code,
+            f"OpenLibrary returned {status_code}",
+            status_code=status_code,
         ) from exc
-    except httpx.RequestError as exc:
+    except (httpx.RequestError, requests_lib.exceptions.RequestException) as exc:
         logger.error("upstream request error: %s", exc)
         raise UpstreamError(f"Could not reach OpenLibrary: {exc}") from exc
 
@@ -71,7 +89,7 @@ def _search(provider: OpenLibraryDataProvider, **kwargs):
 async def opds_home(request: Request):
     logger.info("GET / client=%s", request.client)
     base = _base_url(request)
-    provider = get_provider()
+    provider = get_provider(base)
     search_url = OpenLibraryDataProvider.SEARCH_URL
 
     groups_config = [
@@ -128,7 +146,7 @@ async def opds_home(request: Request):
                 type=OPDS_MEDIA_TYPE,
                 title=subject["presentable_name"],
                 href=(
-                    f"{base}{search_url}?sort=trending"
+                    f"{search_url}?sort=trending"
                     f"&query=subject_key:{subject['key'].split('/')[-1]}"
                     f' -subject:"content_warning:cover"'
                     f" ebook_access:[borrowable TO *]"
@@ -139,15 +157,9 @@ async def opds_home(request: Request):
         groups=loaded_groups,
         facets=None,
         links=[
-            Link(rel="self",   href=f"{base}/",               type=OPDS_MEDIA_TYPE),
-            Link(rel="start",  href=f"{base}/",               type=OPDS_MEDIA_TYPE),
-            Link(rel="search", href=f"{base}/search{{?query}}", type=OPDS_MEDIA_TYPE, templated=True),
-            Link(rel="http://opds-spec.org/shelf",
-                 href="https://archive.org/services/loans/loan/?action=user_bookshelf",
-                 type=OPDS_MEDIA_TYPE),
-            Link(rel="profile",
-                 href="https://archive.org/services/loans/loan/?action=user_profile",
-                 type="application/opds-profile+json"),
+            Link(rel="self",  href=f"{base}/", type=OPDS_MEDIA_TYPE),
+            Link(rel="start", href=f"{base}/", type=OPDS_MEDIA_TYPE),
+            *_common_links(base),
         ],
     )
     return opds_response(catalog.model_dump())
@@ -164,7 +176,9 @@ async def opds_search(
 ):
     logger.info("GET /search query=%r limit=%s page=%s sort=%s mode=%s", query, limit, page, sort, mode)
     base = _base_url(request)
-    provider = get_provider()
+    provider = get_provider(base)
+
+    self_href = f"{base}/search?{request.url.query}" if request.url.query else f"{base}/search"
 
     catalog = Catalog.create(
         metadata=Metadata(title="Search Results"),
@@ -178,14 +192,8 @@ async def opds_search(
             facets={"mode": mode},
         ),
         links=[
-            Link(rel="self",   href=str(request.url),                type=OPDS_MEDIA_TYPE),
-            Link(rel="search", href=f"{base}/search{{?query}}", type=OPDS_MEDIA_TYPE, templated=True),
-            Link(rel="http://opds-spec.org/shelf",
-                 href="https://archive.org/services/loans/loan/?action=user_bookshelf",
-                 type=OPDS_MEDIA_TYPE),
-            Link(rel="profile",
-                 href="https://archive.org/services/loans/loan/?action=user_profile",
-                 type="application/opds-profile+json"),
+            Link(rel="self", href=self_href, type=OPDS_MEDIA_TYPE),
+            *_common_links(base),
         ],
     )
     return opds_response(catalog.model_dump())
@@ -195,7 +203,7 @@ async def opds_search(
 async def opds_books(request: Request, edition_olid: str):
     logger.info("GET /books/%s", edition_olid)
     base = _base_url(request)
-    provider = get_provider()
+    provider = get_provider(base)
     resp = await asyncio.to_thread(_search, provider, query=f"edition_key:{edition_olid}")
     if not resp.records:
         logger.warning("edition not found: %s", edition_olid)
