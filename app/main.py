@@ -5,7 +5,6 @@ import logging
 import os
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.exceptions import EditionNotFound, UpstreamError
@@ -29,18 +28,6 @@ app = FastAPI(
     description="Stand-alone OPDS 2.0 feed for Open Library",
     version="0.1.0",
     lifespan=lifespan,
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "https://localhost:5173",
-        "https://reader.archive.org",
-        "https://reader.archive.org/",
-    ],
-    allow_methods=["GET", "HEAD", "OPTIONS"],
-    allow_headers=["*"],
 )
 
 
