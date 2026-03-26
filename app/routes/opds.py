@@ -106,7 +106,7 @@ async def opds_home(
     base = _base_url(request)
 
     cached = _home_cache.get(base)
-    if cached and (time.monotonic() - cached[0]) < HOME_CACHE_TTL:
+    if not request.url.query and cached and (time.monotonic() - cached[0]) < HOME_CACHE_TTL:
         logger.info("serving cached homepage for base=%s", base)
         return opds_response(cached[1])
 
@@ -199,7 +199,8 @@ async def opds_home(
         ],
     )
     data = catalog.model_dump()
-    _home_cache[base] = (time.monotonic(), data)
+    if not request.url.query:
+        _home_cache[base] = (time.monotonic(), data)
     return opds_response(data)
 
 
