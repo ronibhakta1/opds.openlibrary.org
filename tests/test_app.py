@@ -477,7 +477,8 @@ class TestHomeCacheDevMode:
             float("inf"),
             {"metadata": {"title": "Cached"}, "links": [], "groups": [], "navigation": []},
         )
-        with patch("app.routes.opds.ENVIRONMENT", "development"):
+        with patch("app.routes.opds.ENVIRONMENT", "development"), \
+             patch("app.routes.opds.OPDS_BASE_URL", None):
             resp = client.get("/")
         # Should have hit the real handler, not returned the stale cache entry
         assert resp.status_code == 200
@@ -489,7 +490,8 @@ class TestHomeCacheDevMode:
             float("inf"),
             {"metadata": {"title": "Cached"}, "links": [], "groups": [], "navigation": []},
         )
-        with patch("app.routes.opds.ENVIRONMENT", "production"):
+        with patch("app.routes.opds.ENVIRONMENT", "production"), \
+             patch("app.routes.opds.OPDS_BASE_URL", None):
             resp = client.get("/")
         assert resp.status_code == 200
         assert not mock_empty_search.called
