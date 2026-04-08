@@ -154,7 +154,7 @@ async def opds_home(
         try:
             resp = await asyncio.to_thread(
                 _search, provider, query=q, sort=sort, limit=25,
-                language="eng", facets={"mode": mode}, title=title,
+                language="en", facets={"mode": mode}, title=title,
             )
             return Catalog.create(metadata=Metadata(title=title), response=resp)
         except UpstreamError as exc:
@@ -176,7 +176,7 @@ async def opds_home(
             href=f"{search_url}?{urlencode({
                 'sort': 'trending',
                 'title': subject['presentable_name'],
-                'language': 'eng',
+                'language': 'en',
                 'query': (
                     f'subject_key:{subject["key"].split("/")[-1]}'
                     f' -subject:"content_warning:cover"'
@@ -218,7 +218,7 @@ async def opds_search(
     sort: Optional[str] = Query(default=None),
     mode: str = Query(default="everything", description="Search mode, e.g. 'ebooks' or 'everything'"),
     title: Optional[str] = Query(default=None, description="Display title for the results page"),
-    language: str = Query(default="eng", description="MARC language code to prefer (e.g. 'eng', 'fre')"),
+    language: str = Query(default="en", description="Language code to prefer (e.g. 'en', 'fr')"),
 ):
     logger.info("GET /search query=%r limit=%s page=%s sort=%s mode=%s language=%s", query, limit, page, sort, mode, language)
     base = _base_url(request)
@@ -282,7 +282,7 @@ async def opds_books(request: Request, edition_olid: str):
     logger.info("GET /books/%s", edition_olid)
     base = _base_url(request)
     provider = get_provider(base)
-    resp = await asyncio.to_thread(_search, provider, query=f"edition_key:{edition_olid}", language="eng")
+    resp = await asyncio.to_thread(_search, provider, query=f"edition_key:{edition_olid}", language="en")
     if not resp.records:
         logger.warning("edition not found: %s", edition_olid)
         raise EditionNotFound(edition_olid)
