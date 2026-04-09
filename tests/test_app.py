@@ -237,7 +237,7 @@ class TestOpdsSearch:
         client.get("/search?query=test&page=2&limit=10")
         mock_empty_search.assert_called_once_with(
             query="test", limit=10, offset=10, sort=None, facets={"mode": "everything"},
-            language="en", title=None,
+            language=None, title=None,
         )
 
     def test_invalid_limit_rejected(self):
@@ -356,21 +356,21 @@ class TestSearchModes:
         client.get("/search?query=test&mode=ebooks")
         mock_empty_search.assert_called_once_with(
             query="test", limit=25, offset=0, sort=None, facets={"mode": "ebooks"},
-            language="en", title=None,
+            language=None, title=None,
         )
 
     def test_open_access_mode_forwarded(self, mock_empty_search):
         client.get("/search?query=test&mode=open_access")
         mock_empty_search.assert_called_once_with(
             query="test", limit=25, offset=0, sort=None, facets={"mode": "open_access"},
-            language="en", title=None,
+            language=None, title=None,
         )
 
     def test_buyable_mode_forwarded(self, mock_empty_search):
         client.get("/search?query=test&mode=buyable")
         mock_empty_search.assert_called_once_with(
             query="test", limit=25, offset=0, sort=None, facets={"mode": "buyable"},
-            language="en", title=None,
+            language=None, title=None,
         )
 
 
