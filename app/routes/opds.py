@@ -281,6 +281,7 @@ async def opds_search(
             sort=sort,
             mode=mode,
             language=language,
+            title=title,
             total=safe_total,
             availability_counts=availability_counts,
         ),
