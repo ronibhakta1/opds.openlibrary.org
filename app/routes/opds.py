@@ -159,6 +159,11 @@ async def opds_home(
             f'subject_key:textbooks publish_year:[1990 TO *] {ea}',
             "trending",
         ),
+        (
+            "Standard Ebooks",
+            'publisher:"Standard Ebooks" ebook_access:public',
+            "random.hourly",
+        ),
     ]
 
     async def fetch_group(title: str, q: str, sort: str):
@@ -188,7 +193,7 @@ async def opds_home(
                 'sort': 'trending',
                 'title': subject['presentable_name'],
                 **({'language': language} if language else {}),
-                'query': (
+                'query': subject.get('query') or (
                     f'subject_key:{subject["key"].split("/")[-1]}'
                     f' -subject:"content_warning:cover"'
                     f' ebook_access:[borrowable TO *]'
