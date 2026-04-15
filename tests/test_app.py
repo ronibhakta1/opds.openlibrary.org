@@ -131,7 +131,7 @@ class TestOpdsHome:
     def test_groups_present(self, mock_single_record):
         """Groups with publications are included; empty groups are filtered."""
         data = client.get("/").json()
-        assert len(data.get("groups", [])) == 6
+        assert len(data.get("groups", [])) == 7
 
     def test_empty_groups_filtered(self, mock_empty_search):
         """When search returns no records, groups are filtered out."""
@@ -204,7 +204,7 @@ class TestOpdsHome:
             resp = client.get("/")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data.get("groups", [])) == 5
+        assert len(data.get("groups", [])) == 6
 
 
 # ---------------------------------------------------------------------------
