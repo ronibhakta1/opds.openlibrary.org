@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Optional
-from urllib.parse import urlencode
 import asyncio
 import time
 
@@ -9,12 +8,11 @@ import httpx
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
-from pyopds2 import Catalog, Link, Metadata, Navigation
+from pyopds2 import Catalog, Link, Metadata
 from pyopds2_openlibrary import OpenLibraryDataProvider
 
 from app.config import (
     ENVIRONMENT,
-    FEATURED_SUBJECTS,
     OL_BASE_URL,
     OL_REQUEST_TIMEOUT,
     OL_USER_AGENT,
@@ -44,16 +42,6 @@ def _base_url(request: Request) -> str:
     if OPDS_BASE_URL:
         return OPDS_BASE_URL.rstrip("/")
     return str(request.base_url).rstrip("/")
-
-
-def _home_self_href(base: str, mode: str, language: Optional[str]) -> str:
-    """Build the self-link href for the homepage catalog."""
-    params: dict[str, str] = {}
-    if mode != "everything":
-        params["mode"] = mode
-    if language:
-        params["language"] = language
-    return f"{base}/?{urlencode(params)}" if params else f"{base}/"
 
 
 def _common_links(base: str) -> list[Link]:
@@ -109,117 +97,25 @@ async def opds_home(
     request: Request,
     mode: str = Query(default="everything", description="Availability filter: everything, ebooks, open_access, buyable"),
     language: Optional[str] = Query(default=None, description="BCP 47 language filter (e.g. 'en'). Omit for all languages."),
+    page: int = Query(default=1, ge=1, description="Group page (each page loads a batch of carousels)"),
 ):
-    logger.info("GET / client=%s language=%s", request.client, language)
+    logger.info("GET / client=%s language=%s page=%s", request.client, language, page)
     base = _base_url(request)
 
-    # Only cache the fully-default homepage (no mode filter, no language filter).
-    is_default = mode == "everything" and language is None
+    # Only cache the fully-default first page.
+    is_default = mode == "everything" and language is None and page == 1
     cached = _home_cache.get(base)
     if ENVIRONMENT != "development" and is_default and cached and (time.monotonic() - cached[0]) < HOME_CACHE_TTL:
         logger.info("serving cached homepage for base=%s", base)
         return opds_response(cached[1])
 
-    provider = get_provider(base)
-    search_url = OpenLibraryDataProvider.SEARCH_URL
+    get_provider(base)
 
-    # Mode-aware ebook_access filter for group queries.
-    # open_access uses ebook_access:public so groups populate with Standard Ebooks,
-    # Project Gutenberg, etc. All other modes use the borrowable range.
-    ea = "ebook_access:public" if mode == "open_access" else "ebook_access:[borrowable TO *]"
-
-    groups_config = [
-        (
-            "Trending Books",
-            f'trending_score_hourly_sum:[1 TO *] -subject:"content_warning:cover" {ea} readinglog_count:[4 TO *]',
-            "trending",
-        ),
-        (
-            "Classic Books",
-            'ddc:8* first_publish_year:[* TO 1950] publish_year:[2000 TO *] NOT public_scan_b:false -subject:"content_warning:cover"',
-            "trending",
-        ),
-        (
-            "Romance",
-            f'subject:romance {ea} first_publish_year:[1930 TO *] trending_score_hourly_sum:[1 TO *] -subject:"content_warning:cover"',
-            "trending,trending_score_hourly_sum",
-        ),
-        (
-            "Kids",
-            f'{ea} trending_score_hourly_sum:[1 TO *] (subject_key:(juvenile_audience OR children\'s_fiction OR juvenile_nonfiction OR juvenile_encyclopedias OR juvenile_riddles OR juvenile_poetry OR juvenile_wit_and_humor OR juvenile_limericks OR juvenile_dictionaries OR juvenile_non-fiction) OR subject:("Juvenile literature" OR "Juvenile fiction" OR "pour la jeunesse" OR "pour enfants"))',
-            "random.hourly",
-        ),
-        (
-            "Thrillers",
-            f'subject:thrillers {ea} trending_score_hourly_sum:[1 TO *] -subject:"content_warning:cover"',
-            "trending,trending_score_hourly_sum",
-        ),
-        (
-            "Textbooks",
-            f'subject_key:textbooks publish_year:[1990 TO *] {ea}',
-            "trending",
-        ),
-        (
-            "Standard Ebooks",
-            'publisher:"Standard Ebooks" ebook_access:public',
-            "random.hourly",
-        ),
-    ]
-
-    async def fetch_group(title: str, q: str, sort: str):
-        try:
-            resp = await asyncio.to_thread(
-                _search, provider, query=q, sort=sort, limit=25,
-                language=language, facets={"mode": mode}, title=title,
-            )
-            return Catalog.create(metadata=Metadata(title=title), response=resp)
-        except UpstreamError as exc:
-            logger.warning("Omitting shelf %r due to upstream error: %s", title, exc)
-            return None
-
-    results = await asyncio.gather(
-        *(fetch_group(title, q, sort) for title, q, sort in groups_config)
+    data = await asyncio.to_thread(
+        OpenLibraryDataProvider.build_home_feed,
+        base=base, mode=mode, language=language, page=page,
     )
-    loaded_groups = [
-        g for g in results
-        if g is not None and g.publications
-    ]
 
-    navigation = [
-        Navigation(
-            type=OPDS_MEDIA_TYPE,
-            title=subject["presentable_name"],
-            href=f"{search_url}?{urlencode({
-                'sort': 'trending',
-                'title': subject['presentable_name'],
-                **({'language': language} if language else {}),
-                'query': subject.get('query') or (
-                    f'subject_key:{subject["key"].split("/")[-1]}'
-                    f' -subject:"content_warning:cover"'
-                    f' ebook_access:[borrowable TO *]'
-                ),
-            })}",
-        )
-        for subject in FEATURED_SUBJECTS
-    ] if loaded_groups else []
-
-    catalog = Catalog(
-        metadata=Metadata(title="Open Library"),
-        publications=[],
-        navigation=navigation,
-        groups=loaded_groups,
-        facets=OpenLibraryDataProvider.build_home_facets(base, mode, language),
-        links=[
-            Link(
-                rel="self",
-                href=_home_self_href(base, mode, language),
-                type=OPDS_MEDIA_TYPE,
-            ),
-            Link(rel="start", href=f"{base}/", type=OPDS_MEDIA_TYPE),
-            *_common_links(base),
-        ],
-    )
-    data = catalog.model_dump()
     if ENVIRONMENT != "development" and is_default:
         _home_cache[base] = (time.monotonic(), data)
     return opds_response(data)
@@ -300,7 +196,7 @@ async def opds_books(request: Request, edition_olid: str):
     logger.info("GET /books/%s", edition_olid)
     base = _base_url(request)
     provider = get_provider(base)
-    resp = await asyncio.to_thread(_search, provider, query=f"edition_key:{edition_olid}", language="en")
+    resp = await asyncio.to_thread(_search, provider, query=f"edition_key:{edition_olid}", require_cover=False)
     if not resp.records:
         logger.warning("edition not found: %s", edition_olid)
         raise EditionNotFound(edition_olid)

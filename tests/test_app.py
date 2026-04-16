@@ -15,7 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.config import FEATURED_SUBJECTS
+from pyopds2_openlibrary import OpenLibraryDataProvider
 from app.routes import opds as opds_module
 
 client = TestClient(app)
@@ -125,13 +125,51 @@ class TestOpdsHome:
         """Navigation only appears when groups have publications."""
         data = client.get("/").json()
         nav_titles = {n["title"] for n in data.get("navigation", [])}
-        for subject in FEATURED_SUBJECTS:
+        for subject in OpenLibraryDataProvider.FEATURED_SUBJECTS:
             assert subject["presentable_name"] in nav_titles
 
     def test_groups_present(self, mock_single_record):
-        """Groups with publications are included; empty groups are filtered."""
+        """Page 1 returns first batch of groups (GROUPS_PER_PAGE=3)."""
         data = client.get("/").json()
-        assert len(data.get("groups", [])) == 7
+        assert len(data.get("groups", [])) == 3
+
+    def test_page2_groups(self, mock_single_record):
+        """Page 2 returns the next batch of groups."""
+        data = client.get("/?page=2").json()
+        assert len(data.get("groups", [])) == 3
+
+    def test_page3_groups(self, mock_single_record):
+        """Page 3 returns the remaining group."""
+        data = client.get("/?page=3").json()
+        assert len(data.get("groups", [])) == 1
+
+    def test_next_link_on_page1(self, mock_single_record):
+        """Page 1 includes a 'next' link."""
+        data = client.get("/").json()
+        rels = {lnk["rel"] for lnk in data.get("links", [])}
+        assert "next" in rels
+        assert "previous" not in rels
+
+    def test_previous_link_on_page2(self, mock_single_record):
+        """Page 2 includes both 'next' and 'previous' links."""
+        data = client.get("/?page=2").json()
+        rels = {lnk["rel"] for lnk in data.get("links", [])}
+        assert "next" in rels
+        assert "previous" in rels
+
+    def test_last_page_no_next(self, mock_single_record):
+        """Last page has 'previous' but no 'next' link."""
+        data = client.get("/?page=3").json()
+        rels = {lnk["rel"] for lnk in data.get("links", [])}
+        assert "next" not in rels
+        assert "previous" in rels
+
+    def test_navigation_only_on_page1(self, mock_single_record):
+        """Navigation items only appear on page 1."""
+        data1 = client.get("/").json()
+        data2 = client.get("/?page=2").json()
+        assert len(data1.get("navigation", [])) > 0
+        assert len(data2.get("navigation", [])) == 0
 
     def test_empty_groups_filtered(self, mock_empty_search):
         """When search returns no records, groups are filtered out."""
@@ -204,7 +242,7 @@ class TestOpdsHome:
             resp = client.get("/")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data.get("groups", [])) == 6
+        assert len(data.get("groups", [])) == 2
 
 
 # ---------------------------------------------------------------------------
